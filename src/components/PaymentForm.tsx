@@ -6,32 +6,21 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Smartphone, CreditCard } from 'lucide-react';
+import { usePayment } from '@/hooks/usePayment';
 
 interface PaymentFormProps {}
 
 const PaymentForm: React.FC<PaymentFormProps> = () => {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [amount, setAmount] = useState('');
-  const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const { initiatePayment, loading } = usePayment();
 
   // Validate Kenya phone number format
   const validatePhoneNumber = (phone: string): boolean => {
     const cleanPhone = phone.replace(/\D/g, '');
     const kenyanPattern = /^(254|0)(7|1)\d{8}$/;
     return kenyanPattern.test(cleanPhone);
-  };
-
-  // Format phone number to international format
-  const formatPhoneNumber = (phone: string): string => {
-    const cleanPhone = phone.replace(/\D/g, '');
-    if (cleanPhone.startsWith('0')) {
-      return '254' + cleanPhone.substring(1);
-    }
-    if (cleanPhone.startsWith('254')) {
-      return cleanPhone;
-    }
-    return '254' + cleanPhone;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -65,38 +54,15 @@ const PaymentForm: React.FC<PaymentFormProps> = () => {
       return;
     }
 
-    setLoading(true);
+    const result = await initiatePayment({
+      phone_number: phoneNumber,
+      amount: numericAmount
+    });
 
-    try {
-      // Here you would integrate with M-Pesa Daraja API
-      // For demo purposes, we'll simulate the API call
-      console.log('Initiating M-Pesa STK Push...');
-      console.log('Phone:', formatPhoneNumber(phoneNumber));
-      console.log('Amount:', numericAmount);
-      console.log('Business Number: 0700861129');
-      
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      toast({
-        title: "STK Push Sent! 📱",
-        description: `Check your phone (${phoneNumber}) for the M-Pesa payment prompt`,
-        duration: 5000
-      });
-
-      // Reset form
+    if (result.success) {
+      // Reset form on success
       setPhoneNumber('');
       setAmount('');
-      
-    } catch (error) {
-      console.error('Payment error:', error);
-      toast({
-        title: "Payment Failed",
-        description: "Something went wrong. Please try again.",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -108,7 +74,7 @@ const PaymentForm: React.FC<PaymentFormProps> = () => {
         </div>
         <CardTitle className="text-2xl font-bold text-gray-800">M-Pesa Payment</CardTitle>
         <CardDescription className="text-gray-600">
-          Enter your details to make a secure payment
+          Enter your details to make a secure payment to 0700861129
         </CardDescription>
       </CardHeader>
       
@@ -173,6 +139,7 @@ const PaymentForm: React.FC<PaymentFormProps> = () => {
         <div className="mt-6 p-4 bg-gray-50 rounded-lg">
           <p className="text-xs text-gray-600 text-center">
             You will receive a payment prompt on your phone. Enter your M-Pesa PIN to complete the transaction.
+            Money will go to: <strong>0700861129</strong>
           </p>
         </div>
       </CardContent>
