@@ -34,8 +34,8 @@ export const usePayment = () => {
 
       if (data.success) {
         toast({
-          title: "STK Push Sent! 📱",
-          description: data.message,
+          title: "Payment Request Sent! 📱",
+          description: "Check your phone and enter your M-Pesa PIN to complete the payment",
           duration: 5000
         });
         
@@ -86,7 +86,7 @@ export const usePayment = () => {
         if (payment.status === 'completed') {
           toast({
             title: "Payment Successful! ✅",
-            description: `Payment completed. Receipt: ${payment.mpesa_receipt_number}`,
+            description: `Your payment to BizLens was successful. Receipt: ${payment.mpesa_receipt_number}`,
             duration: 8000
           });
           return;

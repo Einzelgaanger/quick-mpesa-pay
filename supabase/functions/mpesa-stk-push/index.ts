@@ -35,8 +35,8 @@ serve(async (req) => {
       // Generate timestamp
       const timestamp = new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 14)
       
-      // Generate password
-      const shortcode = '174379' // Test shortcode
+      // Use your actual paybill details
+      const shortcode = '880100' // Your paybill number
       const passkey = 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919' // Test passkey
       const password = btoa(shortcode + passkey + timestamp)
 
@@ -53,7 +53,7 @@ serve(async (req) => {
 
       if (paymentError) throw paymentError
 
-      // STK Push request
+      // STK Push request with your paybill details
       const stkPushData = {
         BusinessShortCode: shortcode,
         Password: password,
@@ -64,8 +64,8 @@ serve(async (req) => {
         PartyB: shortcode,
         PhoneNumber: formattedPhone,
         CallBackURL: `${Deno.env.get('SUPABASE_URL')}/functions/v1/mpesa-callback`,
-        AccountReference: `Payment-${payment.id}`,
-        TransactionDesc: 'Payment for services'
+        AccountReference: '9511840014', // Your account number
+        TransactionDesc: 'Payment to BizLens'
       }
 
       const stkResponse = await fetch('https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest', {
@@ -78,6 +78,7 @@ serve(async (req) => {
       })
 
       const stkResult = await stkResponse.json()
+      console.log('STK Push Response:', stkResult)
 
       if (stkResult.ResponseCode === '0') {
         // Update payment with M-Pesa details
@@ -92,14 +93,14 @@ serve(async (req) => {
         return new Response(
           JSON.stringify({
             success: true,
-            message: 'STK Push sent successfully',
+            message: 'Payment request sent to your phone',
             payment_id: payment.id,
             checkout_request_id: stkResult.CheckoutRequestID
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       } else {
-        throw new Error(`STK Push failed: ${stkResult.errorMessage || 'Unknown error'}`)
+        throw new Error(`Payment request failed: ${stkResult.errorMessage || 'Unknown error'}`)
       }
     }
 

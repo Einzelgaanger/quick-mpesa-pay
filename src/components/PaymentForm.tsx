@@ -74,7 +74,7 @@ const PaymentForm: React.FC<PaymentFormProps> = () => {
         </div>
         <CardTitle className="text-2xl font-bold text-gray-800">M-Pesa Payment</CardTitle>
         <CardDescription className="text-gray-600">
-          Enter your details to make a secure payment to 0700861129
+          Make a secure payment to BizLens
         </CardDescription>
       </CardHeader>
       
@@ -128,7 +128,7 @@ const PaymentForm: React.FC<PaymentFormProps> = () => {
             {loading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Sending STK Push...
+                Sending Payment Request...
               </>
             ) : (
               'Pay with M-Pesa'
@@ -138,8 +138,7 @@ const PaymentForm: React.FC<PaymentFormProps> = () => {
 
         <div className="mt-6 p-4 bg-gray-50 rounded-lg">
           <p className="text-xs text-gray-600 text-center">
-            You will receive a payment prompt on your phone. Enter your M-Pesa PIN to complete the transaction.
-            Money will go to: <strong>0700861129</strong>
+            You will receive a payment prompt on your phone. Enter your M-Pesa PIN to complete the payment to <strong>BizLens</strong>.
           </p>
         </div>
       </CardContent>
