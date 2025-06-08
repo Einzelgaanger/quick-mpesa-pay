@@ -29,8 +29,17 @@ serve(async (req) => {
       console.log('Payment request received:', { phone_number, amount })
 
       // Get M-Pesa access token
-      const accessToken = await getMpesaAccessToken()
-      console.log('Access token obtained successfully')
+      let accessToken;
+      try {
+        accessToken = await getMpesaAccessToken()
+        console.log('Access token obtained successfully')
+      } catch (error) {
+        console.error('Failed to get access token:', error)
+        return new Response(
+          JSON.stringify({ error: 'Failed to authenticate with M-Pesa' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
       
       // Format phone number (ensure it starts with 254)
       const formattedPhone = formatPhoneNumber(phone_number)
@@ -39,12 +48,12 @@ serve(async (req) => {
       // Generate timestamp
       const timestamp = new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 14)
       
-      // Use sandbox test shortcode for till payments (Buy Goods)
-      const shortcode = '600980' // Sandbox test shortcode for till/buy goods
+      // Use sandbox test shortcode for paybill payments
+      const shortcode = '174379' // Sandbox test shortcode for paybill
       const passkey = 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919' // Test passkey
       const password = btoa(shortcode + passkey + timestamp)
 
-      console.log('Till configuration:', { shortcode, timestamp })
+      console.log('Paybill configuration:', { shortcode, timestamp })
 
       // Create payment record
       const { data: payment, error: paymentError } = await supabaseClient
@@ -59,17 +68,20 @@ serve(async (req) => {
 
       if (paymentError) {
         console.error('Payment record creation error:', paymentError)
-        throw paymentError
+        return new Response(
+          JSON.stringify({ error: 'Failed to create payment record' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
       }
 
       console.log('Payment record created:', payment.id)
 
-      // STK Push request for till payments
+      // STK Push request for paybill payments
       const stkPushData = {
         BusinessShortCode: shortcode,
         Password: password,
         Timestamp: timestamp,
-        TransactionType: 'CustomerBuyGoodsOnline', // For till payments
+        TransactionType: 'CustomerPayBillOnline', // For paybill payments
         Amount: Math.round(amount),
         PartyA: formattedPhone,
         PartyB: shortcode,
@@ -81,42 +93,55 @@ serve(async (req) => {
 
       console.log('STK Push request data:', stkPushData)
 
-      const stkResponse = await fetch('https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(stkPushData)
-      })
+      try {
+        const stkResponse = await fetch('https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(stkPushData)
+        })
 
-      const stkResult = await stkResponse.json()
-      console.log('STK Push Response:', stkResult)
+        const stkResult = await stkResponse.json()
+        console.log('STK Push Response:', stkResult)
 
-      if (stkResult.ResponseCode === '0') {
-        // Update payment with M-Pesa details
-        await supabaseClient
-          .from('payments')
-          .update({
-            merchant_request_id: stkResult.MerchantRequestID,
-            checkout_request_id: stkResult.CheckoutRequestID
-          })
-          .eq('id', payment.id)
+        if (stkResult.ResponseCode === '0') {
+          // Update payment with M-Pesa details
+          await supabaseClient
+            .from('payments')
+            .update({
+              merchant_request_id: stkResult.MerchantRequestID,
+              checkout_request_id: stkResult.CheckoutRequestID
+            })
+            .eq('id', payment.id)
 
-        console.log('Payment updated with M-Pesa details')
+          console.log('Payment updated with M-Pesa details')
 
+          return new Response(
+            JSON.stringify({
+              success: true,
+              message: 'Payment request sent to your phone',
+              payment_id: payment.id,
+              checkout_request_id: stkResult.CheckoutRequestID
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        } else {
+          console.error('STK Push failed:', stkResult)
+          return new Response(
+            JSON.stringify({
+              error: `Payment request failed: ${stkResult.errorMessage || stkResult.ResponseDescription || 'Unknown error'}`
+            }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+      } catch (fetchError) {
+        console.error('Error calling M-Pesa API:', fetchError)
         return new Response(
-          JSON.stringify({
-            success: true,
-            message: 'Payment request sent to your phone',
-            payment_id: payment.id,
-            checkout_request_id: stkResult.CheckoutRequestID
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          JSON.stringify({ error: 'Failed to communicate with M-Pesa API' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
-      } else {
-        console.error('STK Push failed:', stkResult)
-        throw new Error(`Payment request failed: ${stkResult.errorMessage || 'Unknown error'}`)
       }
     }
 
@@ -126,9 +151,9 @@ serve(async (req) => {
     )
 
   } catch (error) {
-    console.error('Error:', error)
+    console.error('Unexpected error:', error)
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: 'Internal server error', details: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
@@ -149,6 +174,10 @@ async function getMpesaAccessToken(): Promise<string> {
       'Authorization': `Basic ${auth}`
     }
   })
+
+  if (!response.ok) {
+    throw new Error(`Failed to get access token: ${response.status} ${response.statusText}`)
+  }
 
   const data = await response.json()
   
