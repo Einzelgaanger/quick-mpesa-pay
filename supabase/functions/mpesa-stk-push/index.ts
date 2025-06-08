@@ -26,19 +26,25 @@ serve(async (req) => {
     if (req.method === 'POST') {
       const { phone_number, amount }: STKPushRequest = await req.json()
 
+      console.log('Payment request received:', { phone_number, amount })
+
       // Get M-Pesa access token
       const accessToken = await getMpesaAccessToken()
+      console.log('Access token obtained successfully')
       
       // Format phone number (ensure it starts with 254)
       const formattedPhone = formatPhoneNumber(phone_number)
+      console.log('Formatted phone:', formattedPhone)
       
       // Generate timestamp
       const timestamp = new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 14)
       
-      // Use your actual paybill details
-      const shortcode = '880100' // Your paybill number
+      // Use your till number configuration
+      const shortcode = '9511840014' // Your till number
       const passkey = 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919' // Test passkey
       const password = btoa(shortcode + passkey + timestamp)
+
+      console.log('Till configuration:', { shortcode, timestamp })
 
       // Create payment record
       const { data: payment, error: paymentError } = await supabaseClient
@@ -51,22 +57,29 @@ serve(async (req) => {
         .select()
         .single()
 
-      if (paymentError) throw paymentError
+      if (paymentError) {
+        console.error('Payment record creation error:', paymentError)
+        throw paymentError
+      }
 
-      // STK Push request with your paybill details
+      console.log('Payment record created:', payment.id)
+
+      // STK Push request for till payments
       const stkPushData = {
         BusinessShortCode: shortcode,
         Password: password,
         Timestamp: timestamp,
-        TransactionType: 'CustomerPayBillOnline',
+        TransactionType: 'CustomerBuyGoodsOnline', // Different for till payments
         Amount: Math.round(amount),
         PartyA: formattedPhone,
         PartyB: shortcode,
         PhoneNumber: formattedPhone,
         CallBackURL: `${Deno.env.get('SUPABASE_URL')}/functions/v1/mpesa-callback`,
-        AccountReference: '9511840014', // Your account number
+        AccountReference: payment.id, // Use payment ID as reference
         TransactionDesc: 'Payment to BizLens'
       }
+
+      console.log('STK Push request data:', stkPushData)
 
       const stkResponse = await fetch('https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest', {
         method: 'POST',
@@ -90,6 +103,8 @@ serve(async (req) => {
           })
           .eq('id', payment.id)
 
+        console.log('Payment updated with M-Pesa details')
+
         return new Response(
           JSON.stringify({
             success: true,
@@ -100,6 +115,7 @@ serve(async (req) => {
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       } else {
+        console.error('STK Push failed:', stkResult)
         throw new Error(`Payment request failed: ${stkResult.errorMessage || 'Unknown error'}`)
       }
     }
