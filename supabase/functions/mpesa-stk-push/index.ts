@@ -39,8 +39,8 @@ serve(async (req) => {
       // Generate timestamp
       const timestamp = new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 14)
       
-      // Use your till number for sandbox testing
-      const shortcode = '3082892' // Your till number
+      // Use sandbox test shortcode for till payments (Buy Goods)
+      const shortcode = '600980' // Sandbox test shortcode for till/buy goods
       const passkey = 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919' // Test passkey
       const password = btoa(shortcode + passkey + timestamp)
 
